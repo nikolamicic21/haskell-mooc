@@ -4,7 +4,7 @@ module Set7 where
 
 import Mooc.Todo
 import Data.List
-import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.List.NonEmpty (NonEmpty ((:|)), length, reverse)
 import Data.Monoid
 import Data.Semigroup
 
@@ -26,11 +26,13 @@ data Velocity = Velocity Double
 
 -- velocity computes a velocity given a distance and a time
 velocity :: Distance -> Time -> Velocity
-velocity = todo
+velocity distance time = case (distance, time) of
+  (Distance d, Time t) -> Velocity (d / t)
 
 -- travel computes a distance given a velocity and a time
 travel :: Velocity -> Time -> Distance
-travel = todo
+travel velocity time = case (velocity, time) of
+  (Velocity v, Time t) -> Distance (v * t)
 
 ------------------------------------------------------------------------------
 -- Ex 2: let's implement a simple Set datatype. A Set is a list of
@@ -49,15 +51,19 @@ data Set a = Set [a]
 
 -- emptySet is a set with no elements
 emptySet :: Set a
-emptySet = todo
+emptySet = Set []
 
 -- member tests if an element is in a set
 member :: Eq a => a -> Set a -> Bool
-member = todo
+member element set = case set of
+  (Set elements) -> element `elem` elements
 
 -- add a member to a set
-add :: a -> Set a -> Set a
-add = todo
+add :: (Eq a, Ord a) => a -> Set a -> Set a
+add element set = if member element set
+  then set
+  else case set of
+    (Set elements) -> Set (sort (element:elements))
 
 ------------------------------------------------------------------------------
 -- Ex 3: a state machine for baking a cake. The type Event represents
@@ -92,10 +98,27 @@ add = todo
 data Event = AddEggs | AddFlour | AddSugar | Mix | Bake
   deriving (Eq,Show)
 
-data State = Start | Error | Finished
-  deriving (Eq,Show)
+data State = Start
+  | Error
+  | Finished
+  | EggsAdded
+  | FlourAdded
+  | SugarAdded
+  | FlourAndSugarAdded
+  | Mixed
+  | Baked
+  deriving (Eq, Show)
 
-step = todo
+step state event = case (state, event) of
+  (Start, AddEggs) -> EggsAdded
+  (EggsAdded, AddFlour) -> FlourAdded
+  (EggsAdded, AddSugar) -> SugarAdded
+  (SugarAdded, AddFlour) -> FlourAndSugarAdded
+  (FlourAdded, AddSugar) -> FlourAndSugarAdded
+  (FlourAndSugarAdded, Mix) -> Mixed
+  (Mixed, Bake) -> Finished
+  (Finished, _) -> Finished
+  (_, _) -> Error
 
 -- do not edit this
 bake :: [Event] -> State
@@ -115,7 +138,7 @@ bake events = go Start events
 --   average (1.0 :| [2.0,3.0])  ==>  2.0
 
 average :: Fractional a => NonEmpty a -> a
-average = todo
+average xs = sum xs / fromIntegral (Data.List.NonEmpty.length xs)
 
 ------------------------------------------------------------------------------
 -- Ex 5: reverse a NonEmpty list.
@@ -123,7 +146,7 @@ average = todo
 -- PS. The Data.List.NonEmpty type has been imported for you
 
 reverseNonEmpty :: NonEmpty a -> NonEmpty a
-reverseNonEmpty = todo
+reverseNonEmpty = Data.List.NonEmpty.reverse
 
 ------------------------------------------------------------------------------
 -- Ex 6: implement Semigroup instances for the Distance, Time and
@@ -135,6 +158,18 @@ reverseNonEmpty = todo
 -- velocity (Distance 50 <> Distance 10) (Time 1 <> Time 2)
 --    ==> Velocity 20
 
+instance Semigroup Distance where
+  (<>) d1 d2 = case (d1, d2) of
+    (Distance distance1, Distance distance2) -> Distance (distance1 + distance2)
+
+instance Semigroup Time where
+  (<>) t1 t2 = case (t1, t2) of
+    (Time time1, Time time2) -> Time (time1 + time2)
+
+instance Semigroup Velocity where
+  (<>) v1 v2 = case (v1, v2) of
+    (Velocity velocity1, Velocity velocity2) -> Velocity (velocity1 + velocity2)
+
 
 ------------------------------------------------------------------------------
 -- Ex 7: implement a Monoid instance for the Set type from exercise 2.
@@ -143,6 +178,15 @@ reverseNonEmpty = todo
 -- What's the right definition for mempty?
 --
 -- What are the class constraints for the instances?
+
+instance (Eq a, Ord a) => Semigroup (Set a) where
+  (<>) set1 set2 = case (set1, set2) of
+    (Set (s:s1), Set s2) -> Set s1 <> add s (Set s2)
+    (Set [], Set s2) -> Set s2
+
+
+instance (Eq a, Ord a) => Monoid (Set a) where
+  mempty = emptySet
 
 
 ------------------------------------------------------------------------------
@@ -166,18 +210,25 @@ reverseNonEmpty = todo
 
 data Operation1 = Add1 Int Int
                 | Subtract1 Int Int
+                | Multiply1 Int Int
   deriving Show
 
 compute1 :: Operation1 -> Int
 compute1 (Add1 i j) = i+j
 compute1 (Subtract1 i j) = i-j
+compute1 (Multiply1 i j) = i*j
 
 show1 :: Operation1 -> String
-show1 = todo
+show1 op = case op of
+  (Add1 a b) -> show a ++ "+" ++ show b
+  (Subtract1 a b) -> show a ++ "-" ++ show b
+  (Multiply1 a b) -> show a ++ "*" ++ show b
 
 data Add2 = Add2 Int Int
   deriving Show
 data Subtract2 = Subtract2 Int Int
+  deriving Show
+data Multiply2 = Multiply2 Int Int
   deriving Show
 
 class Operation2 op where
@@ -189,6 +240,20 @@ instance Operation2 Add2 where
 instance Operation2 Subtract2 where
   compute2 (Subtract2 i j) = i-j
 
+instance Operation2 Multiply2 where
+  compute2 (Multiply2 i j) = i*j
+
+class Show2 op where
+  show2 :: op -> String
+
+instance Show2 Add2 where
+  show2 (Add2 i j) = show i ++ "+" ++ show j
+
+instance Show2 Subtract2 where
+  show2 (Subtract2 i j) = show i ++ "-" ++ show j
+
+instance Show2 Multiply2 where
+  show2 (Multiply2 i j) = show i ++ "*" ++ show j
 
 ------------------------------------------------------------------------------
 -- Ex 9: validating passwords. Below you'll find a type
@@ -217,7 +282,12 @@ data PasswordRequirement =
   deriving Show
 
 passwordAllowed :: String -> PasswordRequirement -> Bool
-passwordAllowed = todo
+passwordAllowed pwd requirement = case requirement of
+  (MinimumLength l) -> Prelude.length pwd >= l
+  (ContainsSome s) -> any (`elem` pwd) s
+  (DoesNotContain s) -> not $ passwordAllowed pwd (ContainsSome s)
+  (And req1 req2) -> passwordAllowed pwd req1 && passwordAllowed pwd req2
+  (Or req1 req2) -> passwordAllowed pwd req1 || passwordAllowed pwd req2
 
 ------------------------------------------------------------------------------
 -- Ex 10: a DSL for simple arithmetic expressions with addition and
@@ -239,17 +309,38 @@ passwordAllowed = todo
 --     ==> "(3*(1+1))"
 --
 
-data Arithmetic = Todo
+data Arithmetic = Literal Integer | Operation String Arithmetic Arithmetic
   deriving Show
 
 literal :: Integer -> Arithmetic
-literal = todo
+literal = Literal
 
 operation :: String -> Arithmetic -> Arithmetic -> Arithmetic
-operation = todo
+operation = Operation
 
 evaluate :: Arithmetic -> Integer
-evaluate = todo
+evaluate a = case a of
+  (Literal l) -> l
+  (Operation op a b) -> case (op,a,b) of
+    ("+", Literal la, Literal lb) -> la + lb
+    ("*", Literal la, Literal lb) -> la * lb
+    ("+", Literal la, Operation {}) -> la + evaluate b
+    ("*", Literal la, Operation {}) -> la * evaluate b
+    ("+", Operation {}, Literal lb) -> evaluate a + lb
+    ("*", Operation {}, Literal lb) -> evaluate a * lb
+    ("+", Operation {}, Operation {}) -> evaluate a + evaluate b
+    ("*", Operation {}, Operation {}) -> evaluate a * evaluate b
+
 
 render :: Arithmetic -> String
-render = todo
+render a = case a of
+  (Literal l) -> show l
+  (Operation op a b) -> case (op,a,b) of
+    ("+", Literal la, Literal lb) -> "(" ++ show la ++ "+" ++ show lb ++ ")"
+    ("*", Literal la, Literal lb) -> "(" ++ show la ++ "*" ++ show lb ++ ")"
+    ("+", Literal la, Operation {}) -> "(" ++ show la ++ "+" ++ render b ++ ")"
+    ("*", Literal la, Operation {}) -> "(" ++ show la ++ "*" ++ render b ++ ")"
+    ("+", Operation {}, Literal lb) -> "(" ++ render a ++ "+" ++ show lb ++ ")"
+    ("*", Operation {}, Literal lb) -> "(" ++ render a ++ "*" ++ show lb ++ ")"
+    ("+", Operation {}, Operation {}) -> "(" ++ render a ++ "+" ++ render b ++ ")"
+    ("*", Operation {}, Operation {}) -> "(" ++ render a ++ "*" ++ render b ++ ")"
